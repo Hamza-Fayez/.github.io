@@ -1,0 +1,1582 @@
+<!-- Chosen Palette: Soft & Earthy Neutrals (background) and Brilliant Blues (accents/charts) -->
+<!-- Application Structure Plan:
+    The SPA is designed as a dynamic, interactive dashboard.
+    - Header: Displays company branding (logo, name) and the dashboard's purpose.
+    - Overview Section: Displays key aggregate statistics through interactive charts (Geographic Distribution, Top Skills, Common Roles) and a simple count of total candidates. This provides immediate high-level insights.
+    - Interactive Filters: A crucial section allowing users to narrow down the candidate list by location and search for specific skills. This empowers the HR team to find relevant candidates quickly.
+    - Candidate List: A dynamic grid of cards, each representing a candidate. This allows for quick scanning of summary information.
+    - Detailed Profile Modal: A pop-up modal that appears when a candidate card is clicked, displaying the full 'About' section, detailed experience entries, and a comprehensive list of skills. This provides the in-depth information needed for evaluation.
+
+    This structure was chosen to facilitate user understanding and ease of navigation by:
+    - Presenting aggregated data first (charts) for immediate insights into the talent pool.
+    - Providing clear interactive filters to reduce cognitive load and focus results.
+    - Using summary cards for rapid browsing, leading to a detailed modal for deep dives, preventing information overload on the main page.
+    - Maintaining a single-page experience for seamless transitions.
+-->
+<!-- Visualization & Content Choices:
+    - Geographic Distribution: Goal -> Inform & Compare. Viz -> Doughnut Chart (Chart.js/Canvas). Interaction -> Static display of distribution. Justification -> Excellent for showing proportions of a whole, visually intuitive for country breakdown.
+    - Top Skills: Goal -> Inform & Compare. Viz -> Horizontal Bar Chart (Chart.js/Canvas). Interaction -> Static display. Justification -> Ideal for ranking and comparing frequency of multiple categorical items (skills).
+    - Common Roles: Goal -> Inform & Compare. Viz -> Bar Chart (Chart.js/Canvas). Interaction -> Static display. Justification -> Effective for showing frequency across distinct job titles.
+    - Candidate Profiles: Goal -> Organize & Inform. Presentation -> Interactive cards with a detail modal. Interaction -> Click card to open modal. Justification -> Allows for summary scanning and on-demand deep dives, maintaining UI cleanliness.
+    - All charts use Chart.js (Canvas rendering). Textual content is presented in standard HTML elements.
+    - CONFIRMATION: NO SVG graphics used (besides external logo). NO Mermaid JS used.
+-->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MID Contracting - لوحة معلومات المواهب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #F0F4F8;
+            color: #334155;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            max-height: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 450px;
+            }
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.6);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            max-width: 900px;
+            width: 90%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            position: relative;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            font-size: 2rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: #003554;
+            text-decoration: none;
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+    
+    <div class="container mx-auto p-4 sm:p-6 md:p-8 max-w-7xl">
+
+        <header class="flex items-center justify-between mb-12 md:mb-16 p-4 bg-white rounded-2xl shadow-xl">
+             <!-- The company logo is placed here. -->
+            <img src="https://assets.mid.net.sa/logo/mid-logo.svg" alt="شعار شركة وسط الجزيرة للمقاولات" class="h-12 md:h-16" onerror="this.style.display='none'">
+            <div class="text-right">
+                <h1 class="text-xl md:text-3xl font-bold text-[#003554] tracking-tight">MID Dashboard: Employee Recruitment</h1>
+                <p class="text-sm md:text-lg text-slate-600">Mid Arabia Contracting</p>
+            </div>
+        </header>
+
+        <section id="overview" class="mb-12 md:mb-16">
+            <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="flex flex-col items-center justify-center p-4 rounded-lg bg-blue-50 border-b-4 border-[#00A6FB]">
+                        <p class="text-5xl font-black text-[#003554]" id="totalCandidatesCount">0</p>
+                        <p class="text-lg text-slate-600">إجمالي المرشحين</p>
+                    </div>
+                    <div class="chart-container md:col-span-1 h-72 md:h-80">
+                        <canvas id="geoDistributionChart"></canvas>
+                    </div>
+                    <div class="chart-container md:col-span-1 h-72 md:h-80">
+                        <canvas id="rolesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="filters-and-skills" class="mb-12 md:mb-16">
+            <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                <h2 class="text-3xl font-bold text-[#003554] text-center mb-6">استكشاف المرشحين والمهارات</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label for="locationFilter" class="block text-slate-700 text-sm font-bold mb-2">تصفية حسب الموقع:</label>
+                        <select id="locationFilter" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-[#00A6FB] focus:border-transparent bg-slate-50">
+                            <option value="">جميع المواقع</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="skillSearch" class="block text-slate-700 text-sm font-bold mb-2">البحث عن مهارة:</label>
+                        <input type="text" id="skillSearch" placeholder="ابحث عن مهارة (مثال: AutoCAD, PLC)" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-[#00A6FB] focus:border-transparent bg-slate-50">
+                    </div>
+                </div>
+                <div class="chart-container h-80 md:h-96">
+                    <canvas id="skillsChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section id="candidate-list" class="mb-12 md:mb-16">
+            <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                <h2 class="text-3xl font-bold text-[#003554] text-center mb-6">قائمة المرشحين</h2>
+                <div id="candidatesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Candidate cards are dynamically inserted here -->
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <footer class="text-center p-8 bg-[#003554] text-slate-300 mt-12">
+        <p>تم إنشاؤه لتمكين قرارات الموارد البشرية من خلال قوة تصور البيانات.</p>
+    </footer>
+
+    <div id="profileModal" class="modal">
+        <div class="modal-content custom-scroll">
+            <span class="close-button" id="closeModalButton">&times;</span>
+            <h3 class="text-3xl font-bold text-[#003554] mb-4" id="modalFullname"></h3>
+            <p class="text-lg text-slate-600 mb-6" id="modalHeadline"></p>
+            <p class="text-md text-slate-500 mb-8" id="modalLocation"></p>
+
+            <h4 class="text-xl font-bold text-[#003554] mb-2">حول</h4>
+            <p class="text-slate-700 leading-relaxed mb-6" id="modalAbout"></p>
+
+            <h4 class="text-xl font-bold text-[#003554] mb-2">الخبرات</h4>
+            <div id="modalExperience" class="space-y-4 mb-6"></div>
+
+            <h4 class="text-xl font-bold text-[#003554] mb-2">المهارات</h4>
+            <p class="text-slate-700 leading-relaxed" id="modalSkills"></p>
+        </div>
+    </div>
+
+    <script>
+        // This script handles data processing, chart creation, and interactivity.
+        
+        // Raw candidate data is stored in a JavaScript array of objects.
+        // In a real-world application, this data would be fetched from a server API.
+        const rawCandidatesData = [
+            {
+                "basic_info/fullname": "ETO MOUSA",
+                "basic_info/about": "I am passionate about my job and I put all my time and dedication into my work as my first priority. Love to travel and to work in a challenging environment. Objective:- To be associated with a progressive organization that gives scope to update my knowledge and skills and involve myself in dynamic work sphere for the betterment of the organization and self- growth. Highly Motivated, Hardworking & result oriented ETO at AHTS DP1 and DP2 offering over several years of experience working in both Offshore & Onshore Vessels at all levels",
+                "basic_info/headline": "Electro Technical Offers (ETO)",
+                "basic_info/location/city": "Jiddah, Makkah",
+                "basic_info/location/country": "Saudi Arabia",
+                "basic_info/location/full": "Jiddah, Makkah, Saudi Arabia",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "Vetorix marine", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "يونيبيل", "duration": "Oct 2019 - Present · 5 yrs 9 mos", "description": "", "location": "" },
+                    { "title": "مهندس", "company": "NAN", "duration": "Jan 2017 - Feb 2018 · 1 yr 2 mos", "description": "", "location": "" }
+                ],
+                "skills": ["AutoCAD", "SCADA", "مهندس كهرباء", "مكتب إدارة المشاريع", "تسليم المشاريع", "دراسة المخاطر والقابلية للتشغيل"]
+            },
+            {
+                "basic_info/fullname": "Ahmed Abdellah",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الكهف للمقاولات والصيانه العامه",
+                "basic_info/location/city": "Dubai",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "Dubai, United Arab Emirates",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الكهف للمقاولات والصيانه العامه", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "احمد ملاح",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في كهرباء",
+                "basic_info/location/city": "Irbid",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Irbid, Jordan",
+                "experience": [
+                    { "title": "مصور تلفزيوني", "company": "كهرباء", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["مصور تلفزيوني", "مصور فوتوغرافي"]
+            },
+            {
+                "basic_info/fullname": "Basil FathAlrahman",
+                "basic_info/about": "مع خلفية قوية في الهندسة الكهربائية من جامعة السودان للعلوم والتكنولوجيا، أقدم مهاراتي المتميزة في تصميم وتنفيذ الأعمال الكهربائية وصيانتها، وذلك من خلال مشاريعي الحرة التي تسهم في الارتقاء بالبنية التحتية الكهربائية. تركزت جهودي على تسليم المشاريع بكفاءة عالية، بما في ذلك تركيب وصيانة خطوط النقل الكهربائي والتعامل مع محطات التوزيع والتحويل، متمثلاً قيم الدقة والابتكار والالتزام بأعلى معايير السلامة والجودة.",
+                "basic_info/headline": "أنا باسل فتح الرحمن مهندس كهرباء محب لمجال عملي ومتخصص في أنظمة وحلول الطاقه الشمسيه",
+                "basic_info/location/city": "Red Sea State",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Red Sea State, Sudan",
+                "experience": [
+                    { "title": "مهندس كهربائي", "company": "WAFor Solar Solar Energy solutions", "duration": "Feb 2025 - Present · 5 mos", "description": "", "location": "Port Sudan, Red Sea State, Sudan" },
+                    { "title": "مهندس", "company": "", "duration": "Jan 2019 - Jan 2025 · 6 yrs 1 mo", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "", "duration": "Jan 2017 - Feb 2018 · 1 yr 2 mos", "description": "", "location": "" }
+                ],
+                "skills": ["مكتب إدارة المشاريع", "مهندس كهرباء", "تسليم المشاريع", "دراسة المخاطر والقابلية للتشغيل", "Solar Solar Energy solutions"]
+            },
+            {
+                "basic_info/fullname": "Mansour Elsayed",
+                "basic_info/about": "عملت في مجال الطرق والكباري أعمدة الإنارة والمحولات وفي مجال الإنشاءات مكتب فني وموقع وتصميم",
+                "basic_info/headline": "Electrical Engineer",
+                "basic_info/location/city": "United Arab Emirates",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "United Arab Emirates",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "الأشقاء الثلاثة للمقاولات الكهربية والصحية", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء مكتب فني وموقع", "company": "نور مصر للخدمات الفنية", "duration": "Mar 2017 - Dec 2018 · 1 yr 10 mos", "description": "", "location": "الشارقة مويلح" },
+                    { "title": "مهندس كهرباء مكتب فني", "company": "ريو للتجارة والمقاولات", "duration": "Jan 2012 - Dec 2016 · 5 yrs", "description": "", "location": "المملكة العربية السعودية" }
+                ],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "AHMED OSMAN",
+                "basic_info/about": "تصميم وتنفيذ الأعمال الكهربائية",
+                "basic_info/headline": "Electrical Engineer",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس استشاري كهرباء", "company": "امانة منطقة حائل", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "مجموعة عبدالله أبابطين", "duration": "Jan 2010 - Jan 2013 · 3 yrs 1 mo", "description": "", "location": "الدمام المملكة العربية السعودية" },
+                    { "title": "مهندس كهرباء تنفيذ", "company": "وادي النيل للمقاولات", "duration": "Oct 2008 - Dec 2009 · 1 yr 3 mos", "description": "", "location": "Cairo, Egypt" }
+                ],
+                "skills": ["AutoCAD", "مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Musab Eltayeb",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في مذيع بتلفزيون السودان القومي",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "مذيع بتلفزيون السودان القومي", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد احمد",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في مكتب هندسي",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "مكتب هندسي", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ahmed Reda Awad",
+                "basic_info/about": "باسمك ربي نحيا حاليا مهندس مكتب فني شبكات في مشروع الثروة السمكية ببركة غليون اجاده البرامج الهندسيه المذكورة وأعمال الرسومات التنفيذيه أعمال الصيانه الكهربيه للمباني",
+                "basic_info/headline": "مهندس كهرباء صيانة في شركة صان مصر",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء صيانة", "company": "شركة", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس مكتب فني كهرباء", "company": "شركة", "duration": "Jul 2016 - Nov 2017 · 1 yr 5 mos", "description": "", "location": "كفر الشيخ, Egypt" },
+                    { "title": "مهندس كهرباء تنفيذ", "company": "المؤسسة المصريه للمقاولات", "duration": "Jun 2015 - May 2016 · 1 yr", "description": "", "location": "هاسندا باي الساحل الشمالي" },
+                    { "title": "مهندس صيانة وتشغيل", "company": "الشركة العربية للانشاءات والمرافق", "duration": "Jan 2014 - Jan 2015 · 1 yr 1 mo", "description": "مهندس صيانة وتشغيل بمحطه رفع مياه صرف لاعمال الكهرباء", "location": "" },
+                    { "title": "مهندس كهرباء تركيبات", "company": "مؤسسة مرعي خلوفة الأحمري للمقاولات العامة", "duration": "Feb 2012 - Jan 2014 · 2 yrs", "description": "", "location": "محافظة الدرب .المملكة العربية السعودية" }
+                ],
+                "skills": ["مهندس كهرباء صيانة", "مهندس كهرباء تركيبات", "مهندس كهرباء مكتب فني", "مشروع هاسيندا باي الساحل الشمالي", "مشروع الثروة السمكية ببركة غليون", "MEP"]
+            },
+            {
+                "basic_info/fullname": "sami Algadi",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في وظائف في الامارات",
+                "basic_info/location/city": "Bahri, Khartoum State",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Bahri, Khartoum State, Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "وظائف في الامارات", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "mohamed Hasabo",
+                "basic_info/about": "\" Electrical power&machines engineer-automation and plc\" Also like to work at places which help people to make their life better.",
+                "basic_info/headline": "Technical Office-electrical Engineer- مهندس كهرباء-مكتب فني at UTC- الشركة المتحدة للتجارة والمقاولات",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "Technical Office- Electrical Engineer- مهندس كهرباء- مكتب فني", "company": "UTC- الشركة المتحدة للتجارة والمقاولات", "duration": "", "description": "Technical office and Site engineer for Infrastructure electrical engineering.\n* Projects responsible for:\n1- Qena, new city; district 3 and 4.\n2- Dar Misr, new Cairo.", "location": "Cairo Governorate, Egypt" },
+                    { "title": "Control Engineer", "company": "Mrz-Alhandsia for electromechanical works", "duration": "Apr 2018 - Feb 2019 · 11 mos", "description": "Part of a team working across a range of electro-mechanical installations, controls,\nDistribution panels and ring main units.", "location": "" },
+                    { "title": "Maintenance Engineer", "company": "Auto gate, elevators", "duration": "Jan 2018 - Mar 2018 · 3 mos", "description": "Working within a team of engineering contractor for the installation and maintenance of\nElevators and automatic/remote controlled gates.", "location": "shobra masr" },
+                    { "title": "power distribution course", "company": "EGYCET \"الشركة المصرية للتدريب الهندسى\"​", "duration": "Dec 2017 - Jan 2018 · 2 mos", "description": "", "location": "" },
+                    { "title": "Training", "company": "Helwan networks training center", "duration": "Aug 2016 - Aug 2016 · 1 mo", "description": "Transmission lines, Classic control.. 1 week training for each course.", "location": "Egypt, helwan" },
+                    { "title": "Human Resources", "company": "Masr Ta3mal", "duration": "Feb 2014 - Feb 2015 · 1 yr 1 mo", "description": "", "location": "Education" }
+                ],
+                "skills": ["مهندس كهرباء", "Technical Office- Electrical Engineer- مهندس كهرباء- مكتب فني", "Control Engineer", "Maintenance Engineer", "power distribution course", "Training", "Human Resources"]
+            },
+            {
+                "basic_info/fullname": "Yousef Maaitah",
+                "basic_info/about": "العمل في مشروع الربة للطاقة الشمسية المشروع 5 ميغا واط في محافظة الكرك العمل في شركة future energy تركيب مشاريع منزلية +العمل في مشروع 2.7ميغا واط في محافظة المفرق مشترك في برنامج خدمة وطن دورة الطاقة الدوره ٢٥٠ ساعه تدريبية في جامعة الحسين التقنية باشراف الدكتور المستشار اياد السرطاوي دورة green building دورة سلامة عامة neposh مهندس مبيعات في شركة LEMAR Lighting مهندس كهرباء في مشروع توسعة الحرم المكي شركة بن لادن السعودية",
+                "basic_info/headline": "Electrical engineer SBG",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "Electric Engineer", "company": "Saudi Binladin Group (SBG)", "duration": "", "description": "", "location": "Makka" },
+                    { "title": "Sales Engineer", "company": "LEMAR", "duration": "Aug 2020 - Feb 2025 · 4 yrs 7 mos", "description": "", "location": "" },
+                    { "title": "متدرب لدى جامعة الحسين التقنية", "company": "Al", "duration": "Feb 2020 - Aug 2020 · 7 mos", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "الشركة البديلة للطاقة المتجددة ITS", "duration": "Apr 2019 - Aug 2020 · 1 yr 5 mos", "description": "", "location": "عمان الاردن" },
+                    { "title": "مهندس كهرباء", "company": "National Electric Power Company (NEPCO)", "duration": "Apr 2018 - Feb 2020 · 1 yr 11 mos", "description": "متدرب", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء", "Sales Engineer", "متدرب لدى جامعة الحسين التقنية", "مهندس كهرباء", "مهندس كهرباء", "Lighting", "نظام الطاقة", "نظم الطاقة", "الطاقة الشمسية", "الطاقة"]
+            },
+            {
+                "basic_info/fullname": "Hazem Ahmed",
+                "basic_info/about": "تنفيذ وصيانة مشاريع إنارة الطرق والكباري. تصميم الأحمال وحسابات القدرة للكابلات ولوحات التشغيل إعمال الحصر للإنشاءات الكهربية تصميم وتنفيذ دوائر التحكم الالي لخطوط الانتاج بالمصانع.",
+                "basic_info/headline": "مهندس كهرباء",
+                "basic_info/location/city": "Cairo",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Cairo, Egypt",
+                "experience": [
+                    { "title": "مهندس دعم فني كهرباء", "company": "القريات", "duration": "", "description": "", "location": "الجوف السعودية" },
+                    { "title": "Electrical Engineer", "company": "Al farouk", "duration": "Mar 2009 - Jan 2023 · 13 yrs 11 mos", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["AutoCAD", "الإنشاءات", "مهندس دعم فني كهرباء", "Electrical Engineer", "dialux evo", "التوصيل الكهربائي"]
+            },
+            {
+                "basic_info/fullname": "Anas Fekry",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في .",
+                "basic_info/location/city": "Zarqa",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Zarqa, Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": ".", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Mohammad Al Abboudi",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الهيئة الاتحادية للكهرباء و الماء",
+                "basic_info/location/city": "United Arab Emirates",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "United Arab Emirates",
+                "experience": [
+                    { "title": "مهندس تشغيل وصيانة محولات توزيع", "company": "الهيئة الاتحادية للكهرباء و الماء", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "دائرة الأشغال بالشارقة", "duration": "Dec 2014 - Dec 2015 · 1 yr 1 mo", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس تشغيل وصيانة محولات توزيع", "مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "العبيد احمد",
+                "basic_info/about": "تشغيل وصيانة محطات توزيع الجهد العالي والمتوسط والمنخفض صيانة معدات خطوط الانتاج ف المصانع plc scad dsc القياسات والأجهزة الكهربية",
+                "basic_info/headline": "مهندس كهرباء في مركز السودان الفني",
+                "basic_info/location/city": "Bahri, Khartoum State",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Bahri, Khartoum State, Sudan",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "مركز", "duration": "", "description": "", "location": "" },
+                    { "title": "رئيس وحدة صيانة", "company": "مركز السودان الفني", "duration": "Dec 2015 - Present · 9 yrs 7 mos", "description": "", "location": "السودان الخرطوم" }
+                ],
+                "skills": ["مهندس كهرباء", "رئيس وحدة صيانة"]
+            },
+            {
+                "basic_info/fullname": "Khaled Al Momani",
+                "basic_info/about": "عملت في وزارة الدفاع كمهندس كهرباء مشرف على عمل الفنيين، وكذلك عملت في شركة المثالية كمدير مشروع لصيانة مستشفى اليرموك",
+                "basic_info/headline": "مهندس كهرباء",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء اشراف", "company": "صاحب عمل حر", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "الشركة المثالية للكهروميكانيك", "duration": "Aug 2013 - Jan 2017 · 3 yrs 6 mos", "description": "", "location": "إربد،الأردن" },
+                    { "title": "مهندس كهرباء", "company": "وزارة الدفاع", "duration": "Mar 1990 - Jul 2013 · 23 yrs 5 mos", "description": "", "location": "الاردن" }
+                ],
+                "skills": ["مهندس كهرباء اشراف", "مهندس كهرباء", "مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Mohamed Mobarak",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في قيس للأعمال الهندسية السودان",
+                "basic_info/location/city": "Riyadh",
+                "basic_info/location/country": "Saudi Arabia",
+                "basic_info/location/full": "Riyadh, Saudi Arabia",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "قيس للأعمال الهندسية السودان", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس موقع في شركة ARM TRAINING AND ENGINEERING CO.LTD", "company": "ARM", "duration": "Jul 2018 - Jul 2019 · 1 yr 1 mo", "description": "", "location": "On-site" },
+                    { "title": "مهندس مكتب", "company": "الشركه", "duration": "Feb 2017 - Feb 2018 · 1 yr 1 mo", "description": "", "location": "On-site" }
+                ],
+                "skills": ["AutoCAD", "هيكل AutoCAD", "مهندس كهرباء", "مهندس موقع في شركة ARM TRAINING AND ENGINEERING CO.LTD", "مهندس مكتب", "PLC", "برمجة جهاز تحكم منطقي قابل للبرمجة"]
+            },
+            {
+                "basic_info/fullname": "Najeeb Ali",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الهيئة القومية للكهرباء",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الهيئة القومية للكهرباء", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Noor Al-din Qabaja",
+                "basic_info/about": "بكالوريس هندسة الكترونيات واتصالات و بكالوريس الكترونيات تطبيقية ، خبرة سنتين الخبره بـ - Low Current System - cctv - fire alarm - Home Automation System - bms- networks ",
+                "basic_info/headline": "مهندس في شركة المصري للاصالات والتكنولوجيا",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء فرع الكترونيات واتصالات", "company": "شركة المصري للاتصالات والتكنولوجيا", "duration": "", "description": "", "location": "الاردن" },
+                    { "title": "فني اتصالات", "company": "شركة الاتصالات الفلسطينية", "duration": "Jun 2012 - Present · 13 yrs 1 mo", "description": "", "location": "Education" }
+                ],
+                "skills": ["مهندس كهرباء فرع الكترونيات واتصالات", "فني اتصالات", "استخدام برامج matlab و multisim واستخدام microsoft office", "استخدام الانترنت و الحاسوب وبرامجه"]
+            },
+            {
+                "basic_info/fullname": "Ahmed Abdel-majeed",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء فى golden oil (elmaged group)",
+                "basic_info/location/city": "Cairo, Cairo",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Cairo, Cairo, Egypt",
+                "experience": [
+                    { "title": "Electrical Engineer", "company": "Golden Oil for Extracting, Refining and Bottling Vegetarian Oil", "duration": "", "description": "استخلاص وتكرير وتعبئه الزيوت", "location": "مصر" },
+                    { "title": "مهندس كهرباء", "company": "delta", "duration": "Jan 2019 - May 2022 · 3 yrs 5 mos", "description": "", "location": "مصر" }
+                ],
+                "skills": ["AutoCAD", "هندسة الكهرباء", "Electrical Engineer", "مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Hisham Qeshta",
+                "basic_info/about": "I can control all the sites issues like the productivity level; materials availability; documentations; meetings and technical designs",
+                "basic_info/headline": "مهندس كهرباء في ابحث عن عمل حاليا",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "ابحث عن عمل حاليا", "duration": "", "description": "discuss shop drawing with designer and consultant; take approval; perform shop drawing; deals with suppliers; attend site meetings with owner representative; direct the labors team; plan site activities times; calculate the quantities;manage the store; test and commission ", "location": "" },
+                    { "title": "electrical Eng", "company": "Carawan Electromechanical", "duration": "Jan 2012 - Aug 2013 · 1 yr 8 mos", "description": "manage the site with the duties execution; labor team ; materials supply ; construction coordination", "location": "United Arab Emirates" },
+                    { "title": "Executive Manager (father's company)", "company": "Bararakato alhoda for hajj and omra", "duration": "2003 - 2010 · 7 yrs", "description": "", "location": "Jordan" }
+                ],
+                "skills": ["مهندس كهرباء", "electrical Eng", "Executive Manager (father's company)", "CCNA", "cleaning"]
+            },
+            {
+                "basic_info/fullname": "راشد محمد عثمان",
+                "basic_info/about": "° عملت لمدة سبعه سنوات في مجال الصيانه الكهربائيه والميكانيكيه للمولدات الكهربائيه بمختلف احجامها والمضخات للمشاريع الزراعيه الكبيرة وكل الاعمال الكهروميكانيكيه وذلك في شركة دال للخدمات الزراعيه الخرطوم / السودان .\n\n° أعمل حاليا في شركة Glb invest ولاية نهر النيل/ السودان \nوذلك في قسم التشغيل والتحكم ويتم ذلك عن طريق التحكم في مضخات الري بواسطة برامج هندسيه \nscada & plc .",
+                "basic_info/headline": "مهندس كهرباء تحكم في دال الزراعيه",
+                "basic_info/location/city": "Al Goled, Northern State",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Al Goled, Northern State, Sudan",
+                "experience": [
+                    { "title": "مهندس كهرباء تحكم", "company": "دال", "duration": "", "description": "", "location": "Sudan" },
+                    { "title": "مهندس كهرباء تحكم", "company": "", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["Pumps", "Pivot Irrigation", "مهندس كهرباء تحكم"]
+            },
+            {
+                "basic_info/fullname": "ibrahim badiy",
+                "basic_info/about": "Experienced Electrical Engineer with a demonstrated history of working in the electrical and electronic manufacturing industry. Skilled in AutoCAD, Microsoft Excel, Microsoft Word, Engineering, and Microsoft Office. Strong engineering professional with a بكالوريوس كهرباء focused in هندسة كهرباء from جامعة النيل الأزرق. ",
+                "basic_info/headline": "Electrical Engineer at Sae ports corporation",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "سكك حديد السودان", "duration": "", "description": "", "location": "عطبره_السودان" },
+                    { "title": "مهندس كهرباء اول", "company": "هيئة سكك حديد السودان", "duration": "Jun 2015 - Present · 10 yrs 1 mo", "description": "", "location": "بابنوسه السودان" },
+                    { "title": "Electrical Engineer", "company": "`", "duration": "Mar 2013 - Present · 12 yrs 4 mos", "description": "Maintenance and repairof electrical machines\nDrive~s TechnologyAC/DCmotor drives\nPower plants maintenance\nHV(11KV)ABBswitchgear system and diesel generator set", "location": "Sudan port of sudan" }
+                ],
+                "skills": ["مهندس كهرباء", "مهندس كهرباء اول", "Electrical Engineer"]
+            },
+            {
+                "basic_info/fullname": "Mohammed Abd albagi",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في إبراهيم ابوحسنين وشركاه",
+                "basic_info/location/city": "Omdurman, Khartoum State",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Omdurman, Khartoum State, Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "إبراهيم ابوحسنين وشركاه", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Mohamed Abd elkarem",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "--",
+                "basic_info/location/city": "Sharjah, Sharjah Emirate",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "Sharjah, Sharjah Emirate, United Arab Emirates",
+                "experience": [
+                    { "title": "Quality Control Engineer", "company": "PETROJET", "duration": "", "description": "", "location": "السويس العين السخنة مصر" },
+                    { "title": "Site Engineer", "company": "ابوجميعة", "duration": "Aug 2020 - Jan 2023 · 2 yrs 6 mos", "description": "", "location": "البحر الاحمر الغردقة مصر" },
+                    { "title": "مهندس كهرباء موقع", "company": "السروح", "duration": "Feb 2020 - Jan 2023 · 3 yrs", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء موقع", "company": "شركة", "duration": "Feb 2019 - Jan 2020 · 1 yr", "description": "انشاء 54 عمارة بحي الاندلس غرب العاشر من رمضان ", "location": "العاشر من رمضان " },
+                    { "title": "مهندس كهرباء", "company": "مطار", "duration": "Dec 2017 - Dec 2018 · 1 yr 1 mo", "description": "عمل محطات طاقة شمسية تخدم مساكن خاصة بالجيش في سيناء ", "location": "مصر" }
+                ],
+                "skills": ["Quality Control Engineer", "Site Engineer", "مهندس كهرباء موقع", "مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد سعيد مهندس كهرباء",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "AIRCONDITIONING ENGINEER at ELAPCO",
+                "basic_info/location/city": "United Arab Emirates",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "United Arab Emirates",
+                "experience": [{ "title": "AIRCONDITIONING ENGINEER", "company": "ELAPCO", "duration": "", "description": "", "location": "" }],
+                "skills": ["AIRCONDITIONING ENGINEER"]
+            },
+            {
+                "basic_info/fullname": "Mostafa Ali Gomaa",
+                "basic_info/about": "(Electrical Engineer has the abilities to work in the field of construction (Design, Technical Office & Site ",
+                "basic_info/headline": "Electrical engineer at middle egypt for electric distribution ;Ministry of electric and energy",
+                "basic_info/location/city": "Bani Suwayf",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Bani Suwayf, Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء صيانه واختبار مهمات جهد متوسط ومنخفض", "company": "شركه", "duration": "", "description": "\tInitiated project management   knowledge study and  subsequently standardized project management practices                                                      \n\tSupervised construction and pre-commissioning of   electrical rooms, substations, and service buildings for projects.\n\u21b1\tProgramming of Relay Settings, testing, alarm and fault analysis data waveforms and communication to SCADA (ABB, GE, SEL SEPAM, MICOM ). \n\tDesign of LV and MV Switchgear systems (single lines, three lines, AC and DC schematics, equipment wiring, and relay panel wiring) as per Project\n\u21b1\tTesting and commissioning of MV/ LV equipments / Transformers products .\n\u21b1\tSystem impact assessment, grounding grid, protection and coordination, harmonic.\n\u21b1\tManage project scheduling and provide coordination of electrical functions associated with the project.                                                                                                                                      \n\u21b1\tCompletes risk and opportunity assessments and ensures implementation of resulting actions in one’s area of responsibility. \n\u21b1\tReports any contract ; quality; program; cost issues to management along with recommendations for resolution\n\u21b1\tAssume project management roles to co-ordinate the involvement of other engineers, contractors, technicians and suppliers . \n\u21b1\tPrepared technical documentation for operation, troubleshooting and maintenance of industrial systems .\n", "location": "القاهرة مصر" },
+                    { "title": "مهندس كهرباء تصميمات", "company": "شركه", "duration": "Sep 2011 - Feb 2015 · 3 yrs 6 mos", "description": "\t       Supports Contract Managers in issuing claims (new/change in scope of work, cost impact, time \n  impact, risk quantifications). Provides quality solutions as per customer requirements and delivers within \n              budget and contract. Ensures adherence to safety standards and mitigation of potential risks", "location": "القاهرة مصر" },
+                    { "title": "مهندس صيانه", "company": "مصنع", "duration": "Aug 2010 - Sep 2011 · 1 yr 2 mos", "description": "                                    ( Maintenance Engineer For Low & Medium Voltage Cables According to ( IEC\n\n\t                             Make All Technical Cables Tests (Partial Discharge P.D & High Voltage test\n", "location": "بني سويف مصر" }
+                ],
+                "skills": ["Electrical Troubleshooting", "السلامة الكهربائية", "التوصيل الكهربائي", "مهندس كهرباء صيانه واختبار مهمات جهد متوسط ومنخفض", "مهندس كهرباء تصميمات", "مهندس صيانه"]
+            },
+            {
+                "basic_info/fullname": "Ahmad Al-Aloul",
+                "basic_info/about": "تخصصي اتصالات وإلكترونيات - مشروع تخرجي عن الطاقة الشمسية - حضرت دورة مكثّفة في الطاقة الشمسية من إلقاء المهندس المتميز علاء منون بتاريخ 24-8-2017",
+                "basic_info/headline": "Electrical Engineer/com & electronics & solar",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "أبحث عن عمل", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ayman Gafar",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في Saudi Diyar Consulting",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "Saudi Diyar Consulting", "duration": "", "description": "", "location": "" },
+                    { "title": "Head Of Department", "company": "S D C", "duration": "Mar 2013 - Present · 12 yrs 4 mos", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء", "Head Of Department"]
+            },
+            {
+                "basic_info/fullname": "Abdallah Shawish",
+                "basic_info/about": "I am a mechatronics engineer. I finished my studies at Al-Balqa Applied University in Amman in 2024 with a bachelor’s degree with a very good grade. I have worked on taking many technical courses in the field of mechatronics engineering, the most important of which are professional electronic design courses. I have worked on hundreds of projects with the Spectrum team and many projects with the international IEEE team.  I have volunteered in the Spectrum and IEEE teams to give hundreds of courses and workshops in electronics to students. I have voluntarily published dozens of books that help students and I have worked to manage a technical volunteer team within the Spectrum team. We have completed many scientific tables and scientific days within the university.",
+                "basic_info/headline": "Mechatronics Engineer - Specializing in Electronic Hardware Design",
+                "basic_info/location/city": "Amman",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Amman, Jordan",
+                "experience": [
+                    { "title": "Assistant", "company": "IEEE BAU Robotics and Automation Chapter", "duration": "", "description": "", "location": "" },
+                    { "title": "Member development", "company": "IEEE", "duration": "Oct 2022 - Present · 2 yrs 9 mos", "description": "", "location": "Education" }
+                ],
+                "skills": ["Assistant", "Member development", "Arduino"]
+            },
+            {
+                "basic_info/fullname": "Mohamed Badawy",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "BIM Technical Office Engineer at Hassan Allam Saudi Construction Co.",
+                "basic_info/location/city": "Saudi Arabia",
+                "basic_info/location/country": "Saudi Arabia",
+                "basic_info/location/full": "Saudi Arabia",
+                "experience": [],
+                "skills": []
+            },
+            {
+                "basic_info/fullname": "zaki sakr",
+                "basic_info/about": "مهندس كهرباء موقع خبره بمجال المقاولات والتمديدات الكهربيه ..اجيد التصميم الكهربي وكيفيه توزيع الاحمال ..اجيد التعامل مع الاوتوكاد..",
+                "basic_info/headline": "مهندس كهرباء موقع اشراف علي التنفيذ at مكتب محرم بخوم للاستشارات الهندسيه",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء موقع اشراف علي التنفيذ", "company": "مكتب EGEC للاستشارات الهندسيه", "duration": "", "description": "", "location": "القاهره- مصر" },
+                    { "title": "مهندس كهرباء موقع اشراف علي التنفيذ والتمديدات الكهربيه جهد متوسط ومنخفض", "company": "مكتب محرم بخوم للاسشارات الهندسيه", "duration": "Mar 2016 - Sep 2018 · 2 yrs 7 mos", "description": "", "location": "مصر" },
+                    { "title": "مهندس كهرباء موقع تنفيذ واشراف علي الاعمال الكهربيه", "company": "شركه نجم المدائن للمقاولات الكهربيه", "duration": "Feb 2014 - Jan 2016 · 2 yrs", "description": "كما يجيد التصميم والتعامل مع الاوتوكاد وكيفيه توزيع الاحمال الكهربيه..", "location": "الرياض - المملكه العربية السعودية .." }
+                ],
+                "skills": ["AutoCAD", "التوصيل الكهربائي", "الانجيليزيه", "العربية", "مهندس كهرباء موقع اشراف علي التنفيذ", "مهندس كهرباء موقع اشراف علي التنفيذ والتمديدات الكهربيه جهد متوسط ومنخفض", "مهندس كهرباء موقع تنفيذ واشراف علي الاعمال الكهربيه"]
+            },
+            {
+                "basic_info/fullname": "Mohamed fath",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "Self-employed", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "احمد ربيع زارع",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في شركة الوجه القبلي لانتاج الكهرباء",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "شركة الوجه القبلي لانتاج الكهرباء", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Magdy zayed",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في جرين فيلدز",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "جرين فيلدز", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ziad Mohamed",
+                "basic_info/about": "Electrical Power and Machine interested in Industrial Automation And Electrical Distribution",
+                "basic_info/headline": "Electrical Power And Machine Engineer | Automation | IIOT",
+                "basic_info/location/city": "El Mansoura, Ad Daqahliyah",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "El Mansoura, Ad Daqahliyah, Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "Future of Egypt - جهاز مستقبل مصر للتنمية المستدامة", "duration": "", "description": "", "location": "مصر" },
+                    { "title": "Automation Engineer", "company": "Elswedy", "duration": "Jul 2023 - Aug 2024 · 1 yr 2 mos", "description": "Successful Completion of Ammonia Refrigeration System Control Project at Elswedy Food Industries\n\nI am pleased to announce the successful completion of the Ammonia Refrigeration System Control Project at Elswedy Foods Industries. This project involved a comprehensive scope of work.", "location": "Ismailia, Al Isma'iliyah, Egypt" },
+                    { "title": "Automation Engineer", "company": "HA", "duration": "Jul 2022 - Apr 2024 · 1 yr 10 mos", "description": "", "location": "Egypt" },
+                    { "title": "Vice head", "company": "STARKS", "duration": "Nov 2021 - Oct 2022 · 1 yr", "description": "", "location": "El Mansoura, Ad Daqahliyah, Egypt" },
+                    { "title": "Training field", "company": "BGP", "duration": "Mar 2022 - Mar 2022 · 1 mo", "description": "", "location": "10th of Ramadan, Sharkia, Egypt" },
+                    { "title": "Technical Staff", "company": "STARKS MU", "duration": "Aug 2021 - Present · 3 yrs 11 mos", "description": "", "location": "Science and Technology" },
+                    { "title": "Technical Staff", "company": "BIMarabia", "duration": "Mar 2020 - Present · 5 yrs 4 mos", "description": "", "location": "Science and Technology" }
+                ],
+                "skills": ["Automation Engineer", "مهندس كهرباء", "Vice head", "Training field", "Technical Staff", "Technical Staff", "Electrical Instructor", "Professional marketing", "IIoT", "Automation"]
+            },
+            {
+                "basic_info/fullname": "محمد حمد",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الشركة الرباعيه للنسجيات بمصر",
+                "basic_info/location/city": "United Arab Emirates",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "United Arab Emirates",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الشركة الرباعيه للنسجيات بمصر", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Hamada Nassar",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء قوي وكنترول في مصنع لاشين لتصنيع اللدائن",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [{ "title": "مهندس كهرباء قوي وكنترول", "company": "مصنع لاشين لتصنيع اللدائن", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء قوي وكنترول"]
+            },
+            {
+                "basic_info/fullname": "sabry badawy",
+                "basic_info/about": "فني اول كهرباء بمستشفى السعودي الالماني وفندق ماريوت سابقا",
+                "basic_info/headline": "فني اول كهرباء في مجموعة مستشفيات السعودي الألماني",
+                "basic_info/location/city": "Cairo",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Cairo, Egypt",
+                "experience": [
+                    { "title": "فنى كهرباء", "company": "ماريوت", "duration": "", "description": "", "location": "" },
+                    { "title": "فنى اول كهرباء", "company": "مستشفى السعودي الالماني", "duration": "Oct 2017 - Present · 7 yrs 9 mos", "description": "", "location": "" },
+                    { "title": "فني اول كهرباء", "company": "مجموعة", "duration": "Oct 2017 - Present · 7 yrs 9 mos", "description": "", "location": "Cairo, Egypt" }
+                ],
+                "skills": ["فنى كهرباء", "فنى اول كهرباء", "فني اول كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Wael Mohammed Hussein Ahmed",
+                "basic_info/about": "As a Certified software testing engineer , I apply my skills in requirements analysis, test case design, execution, tracking bugs, APIs testing, database testing to ensure the quality and functionality of various software products. I also generate and document bug reports using Jira,Azure and Postman tools, and collaborate with developers and other testers to resolve issues and improve performance. \n\nMy interest in software testing stems from my previous career as a site engineer at Middle East Oil Refinery (MIDOR), where I was responsible for assembling steel structures, updating daily reports, and supervising workers. During this time, I developed my problem-solving, communication, and teamwork abilities, as well as my attention to detail and accuracy. I decided to switch to the software field, which is more suitable for my personality and allows me to be more effective and creative. \n\nI have a bachelor's degree in production engineering from Alexandria University, where I have learned the fundamentals of C++,Java,and  SQL languages, QualityControl,  Quality assurance, Quality management, Ergonomics and more. I am always eager to learn new technologies and tools, and to enhance my software testing skills and knowledge.\n\nFinally, I am Engineer who is loving art, therapy, marketing, vet and more.",
+                "basic_info/headline": "Software Quality Control Engineer - ISTQB®-CTFL",
+                "basic_info/location/city": "Alexandria",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Alexandria, Egypt",
+                "experience": [
+                    { "title": "Quality Control Engineer", "company": "International Turnkey Systems - ITS", "duration": "", "description": "", "location": "Cairo, Egypt" },
+                    { "title": "Quality Control Trainee", "company": "Inova", "duration": "Jun 2023 - Oct 2023 · 5 mos", "description": "", "location": "Alexandria, Egypt" },
+                    { "title": "Software Testing Engineer", "company": "uTest", "duration": "Aug 2022 - May 2023 · 10 mos", "description": "", "location": "Alexandria, Egypt" },
+                    { "title": "Site Engineer", "company": "Middle East Oil Refinery (MIDOR) project", "duration": "Sep 2021 - May 2023 · 1 yr 9 mos", "description": "", "location": "" },
+                    { "title": "Volunteer", "company": "ASME (The American Society of Mechanical Engineers)", "duration": "Oct 2014 - Mar 2020 · 5 yrs 6 mos", "description": "", "location": "Alexandria Governorate, Egypt" },
+                    { "title": "Volunteer", "company": "AIESEC in Egypt", "duration": "Sep 2013 - Nov 2020 · 7 yrs 3 mos", "description": "", "location": "Environment" }
+                ],
+                "skills": ["C (Programming Language)", "C++", "Jira", "Manual Testing", "Quality Control Engineer", "Quality Control Trainee", "Software Testing Engineer", "Site Engineer", "Volunteer", "Volunteer", "API Testing", "Azure DevOps Services"]
+            },
+            {
+                "basic_info/fullname": "خالد محسب",
+                "basic_info/about": "خبرة 6 سنوات بالمملكة العربية السعودية و سنتان بمصر بمجال الصيانة والتشغيل والتيار الخفيف وانذار واطفاء الحريق وصيانة وتشغيل المباني وتركيبات التيار الخفيف ",
+                "basic_info/headline": "مهندس كهرباء في شركة ايسمس للتجارة والصناعة والمقاولات",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء حر", "company": "صاحب عمل حر", "duration": "", "description": "", "location": "القاهرة, Egypt" },
+                    { "title": "مهندس كهرباء الكترونيات", "company": "الهنوف", "duration": "Oct 2016 - Jun 2019 · 2 yrs 9 mos", "description": "", "location": "المملكة العربية السعودية" },
+                    { "title": "مهندس كهرباء صيانة وتشغيل", "company": "بدر الحسيني للتجارة والمقاولات", "duration": "Mar 2012 - Oct 2016 · 4 yrs 8 mos", "description": "", "location": "المملكة العربية السعودية" },
+                    { "title": "مهندس كهرباء الكترونيات", "company": "سيستكو", "duration": "Nov 2010 - Jan 2012 · 1 yr 3 mos", "description": "تركيب وصيانة انظمة التيار الخفيف وانذار واطفاء الحريق والانذار ضد السرقة ", "location": "مدينة نصر" }
+                ],
+                "skills": ["مهندس كهرباء حر", "مهندس كهرباء الكترونيات", "مهندس كهرباء صيانة وتشغيل", "مهندس كهرباء الكترونيات"]
+            },
+            {
+                "basic_info/fullname": "Mohammad Algharabli",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في شركة ميناء الفوسفات الجديد",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "شركة ميناء الفوسفات الجديد", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "شركة ميناء الفوسفات الجديد", "duration": "", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "شركة ميناء الفوسفات الجديد", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "عبدالمنعم اللقاني",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهربا في باور فكتور",
+                "basic_info/location/city": "United Arab Emirates",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "United Arab Emirates",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "الطيار القابضه مصر", "duration": "", "description": "", "location": "" },
+                    { "title": "مدير الصيانة", "company": "شركة الطيار القابضة", "duration": "Oct 2016 - Present · 8 yrs 9 mos", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء", "مدير الصيانة"]
+            },
+            {
+                "basic_info/fullname": "Arkan Saadi",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "Piping Engineer",
+                "basic_info/location/city": "Dubai",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "Dubai, United Arab Emirates",
+                "experience": [
+                    { "title": "Piping Engineer", "company": "Wood", "duration": "", "description": "", "location": "" },
+                    { "title": "Senior Piping Designer", "company": "Wood", "duration": "May 2023 - Mar 2024 · 11 mos", "description": "", "location": "Dubai, Dubai, United Arab Emirates" },
+                    { "title": "Piping Designer", "company": "Iraq", "duration": "Sep 2017 - May 2023 · 5 yrs 9 mos", "description": "", "location": "iraq" }
+                ],
+                "skills": ["AutoCAD", "3D Modeling", "Piping Engineer", "Senior Piping Designer", "Piping Designer", "AutoCAD Civil 3D"]
+            },
+            {
+                "basic_info/fullname": "يوسف Ali",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "طالب في گليهہ‏‏",
+                "basic_info/location/city": "Iraq",
+                "basic_info/location/country": "Iraq",
+                "basic_info/location/full": "Iraq",
+                "experience": [],
+                "skills": []
+            },
+            {
+                "basic_info/fullname": "مجاهد احمد عبدالله",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في السودان",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "السودان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ayoub Zakaria",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في فورتك للصيانة",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "فورتك للصيانة", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "moamen tolba",
+                "basic_info/about": "I am working at Electrical Distribution for middle Egypt Company from 29-10-2007 to now, I worked many jobs as: Technical and support engineer Maintenance engineer for Low voltage Maintenance engineer for medium Voltage Electrical Operating engineer Supervision and electrical designer engineer for new cities in Markaz Al Fayoum",
+                "basic_info/headline": "--",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "شركة توزيع كهرباء مصر الوسطى", "duration": "", "description": "مهندس الشئون الفنية بهندسة مركز الفيوم غرب -\n8 رئيس قسم صيانة الجهد المتوسط مركز لفيوم -\n2 مهندس شئون الفنية بمدينة الفيوم جنوب -\n4 مهندس تشغيل مدينة الفيوم جنوب -\n9 مهندس تشغيل و الأشراف على مشروع مساكن الحدائق بدمو ومساكن دمشقين و على فراج -\n6 مهندسة تشغيل ورئيس شبكة المركز الفيوم شرق -\n2 دراسة و أعداد الخطط الأستثمارية لمركز الفيوم شرق والأشراف على التنفيذ", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "زوزو في مصر",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الشبكه",
+                "basic_info/location/city": "Libya",
+                "basic_info/location/country": "Libya",
+                "basic_info/location/full": "Libya",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الشبكه", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "مروان الزيادي",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء سيارات في جياد الصناعية السودان",
+                "basic_info/location/city": "Libya",
+                "basic_info/location/country": "Libya",
+                "basic_info/location/full": "Libya",
+                "experience": [{ "title": "مهندس كهرباء سيارات", "company": "جياد الصناعية السودان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء سيارات"]
+            },
+            {
+                "basic_info/fullname": "Ali Fared",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الهيئة القومية لسكك حديد مصر",
+                "basic_info/location/city": "Cairo, Cairo",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Cairo, Cairo, Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الهيئة القومية لسكك حديد مصر", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد العبيدي",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء والكترونيات",
+                "basic_info/location/city": "Amman",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Amman, Jordan",
+                "experience": [],
+                "skills": []
+            },
+            {
+                "basic_info/fullname": "Muhammad Mari",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في ليدرز",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "ليدرز", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Nasser Al-homaid",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الإنشاء للاستشارات الهندسية في الشارقة",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء تصميم", "company": "مهندس كهرباء - تصميم - نقابة المهندسين - فرع درعا", "duration": "", "description": "عمل مخططات كهربائية للابنية السكنية\n", "location": "" },
+                    { "title": "مهندس كهرباء استشاري", "company": "الإنشاء للاستشارات الهندسية في الشارقة-الإمارات", "duration": "Aug 1999 - Nov 2005 · 6 yrs 4 mos", "description": "مهندس كهرباء استشاري - اشراف على تنفيذ الأعمال الكهربائية ", "location": "" },
+                    { "title": "مهندس كهرباء مدرس", "company": "المعهد المتوسط الصناعي بدرعا-سوريا", "duration": "May 1995 - Oct 1998 · 3 yrs 6 mos", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء فني", "company": "الشركة العامة للمخابز الآلية بدرعا - سوريا", "duration": "Apr 1992 - May 1995 · 3 yrs 2 mos", "description": "الإشراف على التنفيذات الكهربائية في للمخاببز الآلية ", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء تصميم", "مهندس كهرباء استشاري", "مهندس كهرباء مدرس", "مهندس كهرباء فني"]
+            },
+            {
+                "basic_info/fullname": "Sameh Mohamed",
+                "basic_info/about": "Experienced Senior Electrical Engineer with extensive experience in construction and EPC projects, specializing in electrical systems supervision, design review, and project execution. Proven ability to manage and execute large-scale developments, including the MATAF Expansion, King Abdul-Aziz International Airport, and PIF Tower. Currently working with Al-Amr Group Company for Engineering Consultancy on National Water Company (NWC) projects in the Southern Sector (Tathleeth), overseeing electrical works, reviewing shop drawings, approving material submittals, and ensuring compliance with project specifications. Skilled in coordinating with consultants, contractors, and clients to streamline technical documentation and optimize project performance in high-stakes environments.",
+                "basic_info/headline": "Senior Electrical Engineer",
+                "basic_info/location/city": "Abha, 'Asir",
+                "basic_info/location/country": "Saudi Arabia",
+                "basic_info/location/full": "Abha, 'Asir, Saudi Arabia",
+                "experience": [
+                    { "title": "Senior Electrical Engineer", "company": "AL-AMR Group Company for Engineering Consultancy", "duration": "Feb 2025 - Present · 5 mos", "description": "Currently working with Al-Amr Group\nCompany for Engineering Consultancy on National Water Company (NWC)\nprojects in the Southern Sector (Tathleeth), overseeing electrical works,\nreviewing shop drawings, approving material submittals, and ensuring\ncompliance with project specifications. Skilled in coordinating with consultants,\ncontractors, and clients to streamline technical documentation and optimize\nproject performance in high-stakes environments.", "location": "Khamis Mushait, 'Asir, Saudi Arabia" },
+                    { "title": "Electrical Site Engineer", "company": "FirstFix.KSA", "duration": "Aug 2023 - Feb 2025 · 1 yr 7 mos", "description": "Key Projects: \n•\tCeer Automotive Manufacturing Facility, KAEC, Jeddah\n•\tJeddah Central Development Project – MEP Infrastructure Works\n•\tAl Salam Royal Palace, Jeddah", "location": "Jeddah, Makkah, Saudi Arabia" },
+                    { "title": "Electrical Engineer", "company": "Saudi", "duration": "Sep 2017 - Sep 2023 · 6 yrs 1 mo", "description": "Supervise project execution, evaluate,monitor manpower productivity,Schedule the work in accordance to project timeline and deadlines,Maintain the safety measures on site and ensure that all quality control regulations are met,Coordinate with consultants, architects, and other stakeholders,Prepare technical documents and ensure that the work was carried in accordance to the drawing and specifications,Preparing materials takeoff & material requests", "location": "Makkah, Saudi Arabia" },
+                    { "title": "Site Engineer", "company": "future-m for contracting and supplies( شركة فيوتشر-إم للمقاولات والتوريدات)", "duration": "Jan 2016 - Mar 2017 · 1 yr 3 mos", "description": "Responsible for the implementation and receive of the electricity business, Responsible for inventory quantities BOQ, Preparation Contractors extracts\n Supervising the implementation of electrical works ", "location": "cairo" },
+                    { "title": "Electrical Engineer", "company": "PTA for Engineering Systems", "duration": "Jul 2015 - Dec 2015 · 6 mos", "description": "technical office and site engineer", "location": "" }
+                ],
+                "skills": ["API Testing", "Azure DevOps Services", "C (Programming Language)", "C++", "Critical Thinking for Better Judgment and Decision-Making", "Electrical Engineer", "Electrical Site Engineer", "Jira", "Manual Testing", "Quality Control Engineer", "Quality Control Trainee", "Site Engineer", "Supervisory Skills"]
+            },
+            {
+                "basic_info/fullname": "Nidal Zaher",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في وزارة الاشغال العامة والاسكان",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "وزارة الاشغال العامة والاسكان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ahmed Salah",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء at وظائف مهندسين فى مصر",
+                "basic_info/location/city": "Aswan, Aswan",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Aswan, Aswan, Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "وظائف مهندسين فى مصر", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Esam Ahmad",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في أورتا الحديثة الأدوات الصحية",
+                "basic_info/location/city": "Amman, Amman",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Amman, Amman, Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "أورتا الحديثة الأدوات الصحية", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد حاكم",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس تقني كهرباء في هيئة مياه ولاية الخرطوم",
+                "basic_info/location/city": "Ras al-Khaimah",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "Ras al-Khaimah, United Arab Emirates",
+                "experience": [{ "title": "مهندس تقني كهرباء", "company": "هيئة", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس تقني كهرباء"]
+            },
+            {
+                "basic_info/fullname": "مجاهد احمد عبدالله",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في السودان",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "السودان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ayoub Zakaria",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في فورتك للصيانة",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "فورتك للصيانة", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "moamen tolba",
+                "basic_info/about": "I am working at Electrical Distribution for middle Egypt Company from 29-10-2007 to now, I worked many jobs as: Technical and support engineer Maintenance engineer for Low voltage Maintenance engineer for medium Voltage Electrical Operating engineer Supervision and electrical designer engineer for new cities in Markaz Al Fayoum",
+                "basic_info/headline": "--",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "شركة توزيع كهرباء مصر الوسطى", "duration": "", "description": "مهندس الشئون الفنية بهندسة مركز الفيوم غرب -\n8 رئيس قسم صيانة الجهد المتوسط مركز لفيوم -\n2 مهندس شئون الفنية بمدينة الفيوم جنوب -\n4 مهندس تشغيل مدينة الفيوم جنوب -\n9 مهندس تشغيل و الأشراف على مشروع مساكن الحدائق بدمو ومساكن دمشقين و على فراج -\n6 مهندسة تشغيل ورئيس شبكة المركز الفيوم شرق -\n2 دراسة و أعداد الخطط الأستثمارية لمركز الفيوم شرق والأشراف على التنفيذ", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "زوزو في مصر",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الشبكه",
+                "basic_info/location/city": "Libya",
+                "basic_info/location/country": "Libya",
+                "basic_info/location/full": "Libya",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الشبكه", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "مروان الزيادي",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء سيارات في جياد الصناعية السودان",
+                "basic_info/location/city": "Libya",
+                "basic_info/location/country": "Libya",
+                "basic_info/location/full": "Libya",
+                "experience": [{ "title": "مهندس كهرباء سيارات", "company": "جياد الصناعية السودان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء سيارات"]
+            },
+            {
+                "basic_info/fullname": "Ali Fared",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الهيئة القومية لسكك حديد مصر",
+                "basic_info/location/city": "Cairo, Cairo",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Cairo, Cairo, Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الهيئة القومية لسكك حديد مصر", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد العبيدي",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء والكترونيات",
+                "basic_info/location/city": "Amman",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Amman, Jordan",
+                "experience": [],
+                "skills": []
+            },
+            {
+                "basic_info/fullname": "Muhammad Mari",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في ليدرز",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "ليدرز", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Nasser Al-homaid",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الإنشاء للاستشارات الهندسية في الشارقة",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء تصميم", "company": "مهندس كهرباء - تصميم - نقابة المهندسين - فرع درعا", "duration": "", "description": "عمل مخططات كهربائية للابنية السكنية\n", "location": "" },
+                    { "title": "مهندس كهرباء استشاري", "company": "الإنشاء للاستشارات الهندسية في الشارقة-الإمارات", "duration": "Aug 1999 - Nov 2005 · 6 yrs 4 mos", "description": "مهندس كهرباء استشاري - اشراف على تنفيذ الأعمال الكهربائية ", "location": "" },
+                    { "title": "مهندس كهرباء مدرس", "company": "المعهد المتوسط الصناعي بدرعا-سوريا", "duration": "May 1995 - Oct 1998 · 3 yrs 6 mos", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء فني", "company": "الشركة العامة للمخابز الآلية بدرعا - سوريا", "duration": "Apr 1992 - May 1995 · 3 yrs 2 mos", "description": "الإشراف على التنفيذات الكهربائية في للمخاببز الآلية ", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء تصميم", "مهندس كهرباء استشاري", "مهندس كهرباء مدرس", "مهندس كهرباء فني"]
+            },
+            {
+                "basic_info/fullname": "Sameh Mohamed",
+                "basic_info/about": "Experienced Senior Electrical Engineer with extensive experience in construction and EPC projects, specializing in electrical systems supervision, design review, and project execution. Proven ability to manage and execute large-scale developments, including the MATAF Expansion, King Abdul-Aziz International Airport, and PIF Tower. Currently working with Al-Amr Group Company for Engineering Consultancy on National Water Company (NWC) projects in the Southern Sector (Tathleeth), overseeing electrical works, reviewing shop drawings, approving material submittals, and ensuring compliance with project specifications. Skilled in coordinating with consultants, contractors, and clients to streamline technical documentation and optimize project performance in high-stakes environments.",
+                "basic_info/headline": "Senior Electrical Engineer",
+                "basic_info/location/city": "Abha, 'Asir",
+                "basic_info/location/country": "Saudi Arabia",
+                "basic_info/location/full": "Abha, 'Asir, Saudi Arabia",
+                "experience": [
+                    { "title": "Senior Electrical Engineer", "company": "AL-AMR Group Company for Engineering Consultancy", "duration": "Feb 2025 - Present · 5 mos", "description": "Currently working with Al-Amr Group\nCompany for Engineering Consultancy on National Water Company (NWC)\nprojects in the Southern Sector (Tathleeth), overseeing electrical works,\nreviewing shop drawings, approving material submittals, and ensuring\ncompliance with project specifications. Skilled in coordinating with consultants,\ncontractors, and clients to streamline technical documentation and optimize\nproject performance in high-stakes environments.", "location": "Khamis Mushait, 'Asir, Saudi Arabia" },
+                    { "title": "Electrical Site Engineer", "company": "FirstFix.KSA", "duration": "Aug 2023 - Feb 2025 · 1 yr 7 mos", "description": "Key Projects: \n•\tCeer Automotive Manufacturing Facility, KAEC, Jeddah\n•\tJeddah Central Development Project – MEP Infrastructure Works\n•\tAl Salam Royal Palace, Jeddah", "location": "Jeddah, Makkah, Saudi Arabia" },
+                    { "title": "Electrical Engineer", "company": "Saudi", "duration": "Sep 2017 - Sep 2023 · 6 yrs 1 mo", "description": "Supervise project execution, evaluate,monitor manpower productivity,Schedule the work in accordance to project timeline and deadlines,Maintain the safety measures on site and ensure that all quality control regulations are met,Coordinate with consultants, architects, and other stakeholders,Prepare technical documents and ensure that the work was carried in accordance to the drawing and specifications,Preparing materials takeoff & material requests", "location": "Makkah, Saudi Arabia" },
+                    { "title": "Site Engineer", "company": "future-m for contracting and supplies( شركة فيوتشر-إم للمقاولات والتوريدات)", "duration": "Jan 2016 - Mar 2017 · 1 yr 3 mos", "description": "Responsible for the implementation and receive of the electricity business, Responsible for inventory quantities BOQ, Preparation Contractors extracts\n Supervising the implementation of electrical works ", "location": "cairo" },
+                    { "title": "Electrical Engineer", "company": "PTA for Engineering Systems", "duration": "Jul 2015 - Dec 2015 · 6 mos", "description": "technical office and site engineer", "location": "" }
+                ],
+                "skills": ["API Testing", "Azure DevOps Services", "C (Programming Language)", "C++", "Critical Thinking for Better Judgment and Decision-Making", "Electrical Engineer", "Electrical Site Engineer", "Jira", "Manual Testing", "Quality Control Engineer", "Quality Control Trainee", "Site Engineer", "Supervisory Skills"]
+            },
+            {
+                "basic_info/fullname": "Nidal Zaher",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في وزارة الاشغال العامة والاسكان",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "وزارة الاشغال العامة والاسكان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ahmed Salah",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء at وظائف مهندسين فى مصر",
+                "basic_info/location/city": "Aswan, Aswan",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Aswan, Aswan, Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "وظائف مهندسين فى مصر", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Esam Ahmad",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في أورتا الحديثة الأدوات الصحية",
+                "basic_info/location/city": "Amman, Amman",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Amman, Amman, Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "أورتا الحديثة الأدوات الصحية", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد حاكم",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس تقني كهرباء في هيئة مياه ولاية الخرطوم",
+                "basic_info/location/city": "Ras al-Khaimah",
+                "basic_info/location/country": "United Arab Emirates",
+                "basic_info/location/full": "Ras al-Khaimah, United Arab Emirates",
+                "experience": [{ "title": "مهندس تقني كهرباء", "company": "هيئة", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس تقني كهرباء"]
+            },
+            {
+                "basic_info/fullname": "مجاهد احمد عبدالله",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في السودان",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "السودان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Ayoub Zakaria",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في فورتك للصيانة",
+                "basic_info/location/city": "Sudan",
+                "basic_info/location/country": "Sudan",
+                "basic_info/location/full": "Sudan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "فورتك للصيانة", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "moamen tolba",
+                "basic_info/about": "I am working at Electrical Distribution for middle Egypt Company from 29-10-2007 to now, I worked many jobs as: Technical and support engineer Maintenance engineer for Low voltage Maintenance engineer for medium Voltage Electrical Operating engineer Supervision and electrical designer engineer for new cities in Markaz Al Fayoum",
+                "basic_info/headline": "--",
+                "basic_info/location/city": "Egypt",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Egypt",
+                "experience": [
+                    { "title": "مهندس كهرباء", "company": "شركة توزيع كهرباء مصر الوسطى", "duration": "", "description": "مهندس الشئون الفنية بهندسة مركز الفيوم غرب -\n8 رئيس قسم صيانة الجهد المتوسط مركز لفيوم -\n2 مهندس شئون الفنية بمدينة الفيوم جنوب -\n4 مهندس تشغيل مدينة الفيوم جنوب -\n9 مهندس تشغيل و الأشراف على مشروع مساكن الحدائق بدمو ومساكن دمشقين و على فراج -\n6 مهندسة تشغيل ورئيس شبكة المركز الفيوم شرق -\n2 دراسة و أعداد الخطط الأستثمارية لمركز الفيوم شرق والأشراف على التنفيذ", "location": "" },
+                    { "title": "مهندس كهرباء", "company": "", "duration": "", "description": "", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "زوزو في مصر",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الشبكه",
+                "basic_info/location/city": "Libya",
+                "basic_info/location/country": "Libya",
+                "basic_info/location/full": "Libya",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الشبكه", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "مروان الزيادي",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء سيارات في جياد الصناعية السودان",
+                "basic_info/location/city": "Libya",
+                "basic_info/location/country": "Libya",
+                "basic_info/location/full": "Libya",
+                "experience": [{ "title": "مهندس كهرباء سيارات", "company": "جياد الصناعية السودان", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء سيارات"]
+            },
+            {
+                "basic_info/fullname": "Ali Fared",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الهيئة القومية لسكك حديد مصر",
+                "basic_info/location/city": "Cairo, Cairo",
+                "basic_info/location/country": "Egypt",
+                "basic_info/location/full": "Cairo, Cairo, Egypt",
+                "experience": [{ "title": "مهندس كهرباء", "company": "الهيئة القومية لسكك حديد مصر", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "محمد العبيدي",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء والكترونيات",
+                "basic_info/location/city": "Amman",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Amman, Jordan",
+                "experience": [],
+                "skills": []
+            },
+            {
+                "basic_info/fullname": "Muhammad Mari",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في ليدرز",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [{ "title": "مهندس كهرباء", "company": "ليدرز", "duration": "", "description": "", "location": "" }],
+                "skills": ["مهندس كهرباء"]
+            },
+            {
+                "basic_info/fullname": "Nasser Al-homaid",
+                "basic_info/about": "No detailed about information provided.",
+                "basic_info/headline": "مهندس كهرباء في الإنشاء للاستشارات الهندسية في الشارقة",
+                "basic_info/location/city": "Jordan",
+                "basic_info/location/country": "Jordan",
+                "basic_info/location/full": "Jordan",
+                "experience": [
+                    { "title": "مهندس كهرباء تصميم", "company": "مهندس كهرباء - تصميم - نقابة المهندسين - فرع درعا", "duration": "", "description": "عمل مخططات كهربائية للابنية السكنية\n", "location": "" },
+                    { "title": "مهندس كهرباء استشاري", "company": "الإنشاء للاستشارات الهندسية في الشارقة-الإمارات", "duration": "Aug 1999 - Nov 2005 · 6 yrs 4 mos", "description": "مهندس كهرباء استشاري - اشراف على تنفيذ الأعمال الكهربائية ", "location": "" },
+                    { "title": "مهندس كهرباء مدرس", "company": "المعهد المتوسط الصناعي بدرعا-سوريا", "duration": "May 1995 - Oct 1998 · 3 yrs 6 mos", "description": "", "location": "" },
+                    { "title": "مهندس كهرباء فني", "company": "الشركة العامة للمخابز الآلية بدرعا - سوريا", "duration": "Apr 1992 - May 1995 · 3 yrs 2 mos", "description": "الإشراف على التنفيذات الكهربائية في للمخاببز الآلية ", "location": "" }
+                ],
+                "skills": ["مهندس كهرباء تصميم", "مهندس كهرباء استشاري", "مهندس كهرباء مدرس", "مهندس كهرباء فني"]
+            },
+            {
+                "basic_info/fullname": "Sameh Mohamed",
+                "basic_info/about": "Experienced Senior Electrical Engineer with extensive experience in construction and EPC projects, specializing in electrical systems supervision, design review, and project execution. Proven ability to manage and execute large-scale developments, including the MATAF Expansion, King Abdul-Aziz International Airport, and PIF Tower. Currently working with Al-Amr Group Company for Engineering Consultancy on National Water Company (NWC) projects in the Southern Sector (Tathleeth), overseeing electrical works, reviewing shop drawings, approving material submittals, and ensuring compliance with project specifications. Skilled in coordinating with consultants, contractors, and clients to streamline technical documentation and optimize project performance in high-stakes environments.",
+                "basic_info/headline": "Senior Electrical Engineer",
+                "basic_info/location/city": "Abha, 'Asir",
+                "basic_info/location/country": "Saudi Arabia",
+                "basic_info/location/full": "Abha, 'Asir, Saudi Arabia",
+                "experience": [
+                    { "title": "Senior Electrical Engineer", "company": "AL-AMR Group Company for Engineering Consultancy", "duration": "Feb 2025 - Present · 5 mos", "description": "Currently working with Al-Amr Group\nCompany for Engineering Consultancy on National Water Company (NWC)\nprojects in the Southern Sector (Tathleeth), overseeing electrical works,\nreviewing shop drawings, approving material submittals, and ensuring\ncompliance with project specifications. Skilled in coordinating with consultants,\ncontractors, and clients to streamline technical documentation and optimize\nproject performance in high-stakes environments.", "location": "Khamis Mushait, 'Asir, Saudi Arabia" },
+                    { "title": "Electrical Site Engineer", "company": "FirstFix.KSA", "duration": "Aug 2023 - Feb 2025 · 1 yr 7 mos", "description": "Key Projects: \n•\tCeer Automotive Manufacturing Facility, KAEC, Jeddah\n•\tJeddah Central Development Project – MEP Infrastructure Works\n•\tAl Salam Royal Palace, Jeddah", "location": "Jeddah, Makkah, Saudi Arabia" },
+                    { "title": "Electrical Engineer", "company": "Saudi", "duration": "Sep 2017 - Sep 2023 · 6 yrs 1 mo", "description": "Supervise project execution, evaluate,monitor manpower productivity,Schedule the work in accordance to project timeline and deadlines,Maintain the safety measures on site and ensure that all quality control regulations are met,Coordinate with consultants, architects, and other stakeholders,Prepare technical documents and ensure that the work was carried in accordance to the drawing and specifications,Preparing materials takeoff & material requests", "location": "Makkah, Saudi Arabia" },
+                    { "title": "Site Engineer", "company": "future-m for contracting and supplies( شركة فيوتشر-إم للمقاولات والتوريدات)", "duration": "Jan 2016 - Mar 2017 · 1 yr 3 mos", "description": "Responsible for the implementation and receive of the electricity business, Responsible for inventory quantities BOQ, Preparation Contractors extracts\n Supervising the implementation of electrical works ", "location": "cairo" },
+                    { "title": "Electrical Engineer", "company": "PTA for Engineering Systems", "duration": "Jul 2015 - Dec 2015 · 6 mos", "description": "technical office and site engineer", "location": "" }
+                ],
+                "skills": ["API Testing", "Azure DevOps Services", "C (Programming Language)", "C++", "Critical Thinking for Better Judgment and Decision-Making", "Electrical Engineer", "Electrical Site Engineer", "Jira", "Manual Testing", "Quality Control Engineer", "Quality Control Trainee", "Site Engineer", "Supervisory Skills"]
+            }
+        ];
+
+        let allCandidates = [];
+
+        /**
+         * Cleans and maps the raw data into a more usable format.
+         * @param {Array<Object>} data The raw candidate data.
+         * @returns {Array<Object>} The cleaned and mapped candidate data.
+         */
+        function cleanAndMapData(data) {
+            return data.filter(c => c['basic_info/fullname'] && c['basic_info/fullname'].trim() !== '').map(c => ({
+                fullname: c['basic_info/fullname'].trim(),
+                about: (c['basic_info/about'] || 'No detailed about information provided.').trim(),
+                headline: (c['basic_info/headline'] || 'N/A').trim(),
+                location: (c['basic_info/location/full'] || 'N/A').trim(),
+                country: (c['basic_info/location/country'] || 'N/A').trim(),
+                experience: c.experience || [],
+                skills: c.skills || []
+            }));
+        }
+
+        allCandidates = cleanAndMapData(rawCandidatesData);
+
+        const chartColors = {
+            primary: '#00A6FB',
+            secondary: '#0582CA',
+            tertiary: '#F8C630',
+            dark: '#003554',
+            lightGray: '#D1D5DB'
+        };
+
+        /**
+         * Processes long labels for charts to wrap them into multiple lines.
+         * @param {string} label The original label string.
+         * @param {number} maxLength The maximum length of a line.
+         * @returns {string|Array<string>} The processed label.
+         */
+        const processLabel = (label, maxLength = 16) => {
+            if (label.length <= maxLength) {
+                return label;
+            }
+            const words = label.split(' ');
+            const lines = [];
+            let currentLine = '';
+            for (const word of words) {
+                if ((currentLine + ' ' + word).length > maxLength && currentLine !== '') {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine += (currentLine ? ' ' : '') + word;
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        };
+
+        /**
+         * Custom callback for chart tooltips to display the full label.
+         * @param {Array<Object>} tooltipItems The tooltip items from Chart.js.
+         * @returns {string} The full title for the tooltip.
+         */
+        const tooltipTitleCallback = (tooltipItems) => {
+            const item = tooltipItems[0];
+            let label = item.chart.data.labels[item.dataIndex];
+            if (Array.isArray(label)) {
+                return label.join(' ');
+            }
+            return label;
+        };
+
+        /**
+         * Generates common options for charts.
+         * @param {boolean} isHorizontal Whether the chart is a horizontal bar chart.
+         * @returns {Object} The chart options object.
+         */
+        const commonChartOptions = (isHorizontal = false) => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: isHorizontal ? 'y' : 'x',
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        title: tooltipTitleCallback
+                    },
+                    backgroundColor: chartColors.dark,
+                    titleFont: { size: 14, family: "'Cairo', sans-serif" },
+                    bodyFont: { size: 12, family: "'Cairo', sans-serif" },
+                    padding: 12,
+                    cornerRadius: 8,
+                    rtl: true // Enable RTL for tooltips
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#475569', font: { family: "'Cairo', sans-serif" }},
+                    grid: { color: '#e2e8f0' }
+                },
+                x: {
+                    ticks: { color: '#475569', font: { family: "'Cairo', sans-serif" }},
+                    grid: { color: '#f8fafc' }
+                }
+            },
+            layout: {
+                padding: 10
+            }
+        });
+
+        let geoChart, skillsChart, rolesChart;
+
+        /**
+         * Updates all charts with new data.
+         * @param {Array<Object>} data The candidate data to display.
+         */
+        function updateCharts(data) {
+            // --- Geographic Distribution Chart (Doughnut) ---
+            const countryCounts = {};
+            data.forEach(c => {
+                const country = c.country;
+                if (country && country !== 'N/A') {
+                    countryCounts[country] = (countryCounts[country] || 0) + 1;
+                }
+            });
+            const sortedCountries = Object.entries(countryCounts).sort(([, a], [, b]) => b - a);
+            const geoLabels = sortedCountries.map(([country]) => processLabel(country));
+            const geoData = sortedCountries.map(([, count]) => count);
+
+            if (geoChart) {
+                geoChart.data.labels = geoLabels;
+                geoChart.data.datasets[0].data = geoData;
+                geoChart.update();
+            } else {
+                const geoCtx = document.getElementById('geoDistributionChart').getContext('2d');
+                geoChart = new Chart(geoCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: geoLabels,
+                        datasets: [{
+                            data: geoData,
+                            backgroundColor: [
+                                chartColors.primary, chartColors.secondary, chartColors.tertiary,
+                                '#1E90FF', '#4682B4', '#6A5ACD', '#7B68EE', '#87CEEB', '#ADD8E6'
+                            ],
+                            borderColor: '#FFFFFF',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#475569',
+                                    font: { family: "'Cairo', sans-serif", size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: { title: tooltipTitleCallback },
+                                backgroundColor: chartColors.dark,
+                                titleFont: { size: 14, family: "'Cairo', sans-serif" },
+                                bodyFont: { size: 12, family: "'Cairo', sans-serif" },
+                                padding: 12,
+                                cornerRadius: 8,
+                                rtl: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- Top Skills Chart (Horizontal Bar) ---
+            const skillCounts = {};
+            data.forEach(c => {
+                c.skills.forEach(skill => {
+                    skillCounts[skill] = (skillCounts[skill] || 0) + 1;
+                });
+            });
+            const sortedSkills = Object.entries(skillCounts).sort(([, a], [, b]) => b - a).slice(0, 10);
+            const skillLabels = sortedSkills.map(([skill]) => processLabel(skill));
+            const skillData = sortedSkills.map(([, count]) => count);
+
+            if (skillsChart) {
+                skillsChart.data.labels = skillLabels;
+                skillsChart.data.datasets[0].data = skillData;
+                skillsChart.update();
+            } else {
+                const skillsCtx = document.getElementById('skillsChart').getContext('2d');
+                skillsChart = new Chart(skillsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: skillLabels,
+                        datasets: [{
+                            label: 'عدد المرشحين',
+                            data: skillData,
+                            backgroundColor: chartColors.primary,
+                            borderColor: chartColors.dark,
+                            borderWidth: 1.5,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: commonChartOptions(true)
+                });
+            }
+
+            // --- Common Roles Chart (Bar) ---
+            const roleCounts = {};
+            data.forEach(c => {
+                const headline = c.headline;
+                if (headline && headline !== 'N/A' && headline !== '--') {
+                    roleCounts[headline] = (roleCounts[headline] || 0) + 1;
+                }
+            });
+            const sortedRoles = Object.entries(roleCounts).sort(([, a], [, b]) => b - a).slice(0, 5);
+            const roleLabels = sortedRoles.map(([role]) => processLabel(role));
+            const roleData = sortedRoles.map(([, count]) => count);
+
+            if (rolesChart) {
+                rolesChart.data.labels = roleLabels;
+                rolesChart.data.datasets[0].data = roleData;
+                rolesChart.update();
+            } else {
+                const rolesCtx = document.getElementById('rolesChart').getContext('2d');
+                rolesChart = new Chart(rolesCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: roleLabels,
+                        datasets: [{
+                            label: 'عدد المرشحين',
+                            data: roleData,
+                            backgroundColor: [chartColors.dark, chartColors.primary, chartColors.secondary, chartColors.tertiary, chartColors.lightGray],
+                            borderColor: '#FFFFFF',
+                            borderWidth: 2,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: commonChartOptions()
+                });
+            }
+
+            document.getElementById('totalCandidatesCount').textContent = data.length;
+        }
+
+        /**
+         * Renders the list of candidate cards based on the provided data.
+         * @param {Array<Object>} candidates The candidates to render.
+         */
+        function renderCandidates(candidates) {
+            const grid = document.getElementById('candidatesGrid');
+            grid.innerHTML = '';
+            if (candidates.length === 0) {
+                grid.innerHTML = `<p class="text-center text-slate-500 col-span-full">لا يوجد مرشحون يطابقون معايير البحث.</p>`;
+                return;
+            }
+            candidates.forEach(candidate => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow duration-300';
+                card.innerHTML = `
+                    <h3 class="text-xl font-bold text-[#003554] mb-2">${candidate.fullname}</h3>
+                    <p class="text-slate-600 mb-2 truncate">${candidate.headline}</p>
+                    <p class="text-slate-500 text-sm">${candidate.location}</p>
+                `;
+                card.addEventListener('click', () => openProfileModal(candidate));
+                grid.appendChild(card);
+            });
+        }
+
+        /**
+         * Opens the modal with the detailed profile of a candidate.
+         * @param {Object} candidate The candidate object.
+         */
+        function openProfileModal(candidate) {
+            document.getElementById('modalFullname').textContent = candidate.fullname;
+            document.getElementById('modalHeadline').textContent = candidate.headline;
+            document.getElementById('modalLocation').textContent = candidate.location;
+            document.getElementById('modalAbout').textContent = candidate.about;
+
+            const experienceDiv = document.getElementById('modalExperience');
+            experienceDiv.innerHTML = '';
+            if (candidate.experience.length > 0) {
+                candidate.experience.forEach(exp => {
+                    const expEntry = document.createElement('div');
+                    expEntry.className = 'border-b border-slate-200 pb-3 mb-3 last:border-b-0 last:pb-0 last:mb-0';
+                    expEntry.innerHTML = `
+                        <p class="font-semibold text-slate-800">${exp.title || 'N/A'} at ${exp.company || 'N/A'}</p>
+                        <p class="text-sm text-slate-600">${exp.duration || 'N/A'}${exp.location ? ', ' + exp.location : ''}</p>
+                        ${exp.description ? `<p class="text-xs text-slate-500 mt-1">${exp.description}</p>` : ''}
+                    `;
+                    experienceDiv.appendChild(expEntry);
+                });
+            } else {
+                experienceDiv.innerHTML = '<p class="text-slate-500 text-sm">لا توجد تفاصيل خبرة مقدمة.</p>';
+            }
+
+            document.getElementById('modalSkills').textContent = candidate.skills.join(', ') || 'لا توجد مهارات مقدمة.';
+
+            document.getElementById('profileModal').style.display = 'flex';
+        }
+
+        /**
+         * Closes the profile modal.
+         */
+        function closeModal() {
+            document.getElementById('profileModal').style.display = 'none';
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('closeModalButton').addEventListener('click', closeModal);
+        window.addEventListener('click', (event) => {
+            if (event.target === document.getElementById('profileModal')) {
+                closeModal();
+            }
+        });
+
+        const locationFilter = document.getElementById('locationFilter');
+        const skillSearch = document.getElementById('skillSearch');
+
+        /**
+         * Populates the location dropdown filter with unique countries from the data.
+         */
+        function populateLocationFilter() {
+            const locations = new Set(allCandidates.map(c => c.country).filter(country => country && country !== 'N/A'));
+            locations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationFilter.appendChild(option);
+            });
+        }
+
+        /**
+         * Applies the current filter values to the candidate data and re-renders the UI.
+         */
+        function applyFilters() {
+            const selectedLocation = locationFilter.value;
+            const searchTerm = skillSearch.value.toLowerCase().trim();
+
+            let filteredCandidates = allCandidates;
+
+            if (selectedLocation) {
+                filteredCandidates = filteredCandidates.filter(c => c.country === selectedLocation);
+            }
+
+            if (searchTerm) {
+                filteredCandidates = filteredCandidates.filter(c => 
+                    c.skills.some(skill => skill.toLowerCase().includes(searchTerm)) ||
+                    c.about.toLowerCase().includes(searchTerm) ||
+                    c.headline.toLowerCase().includes(searchTerm) ||
+                    c.fullname.toLowerCase().includes(searchTerm)
+                );
+            }
+            renderCandidates(filteredCandidates);
+            updateCharts(filteredCandidates);
+        }
+
+        locationFilter.addEventListener('change', applyFilters);
+        skillSearch.addEventListener('input', applyFilters);
+
+        // Initial setup when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            updateCharts(allCandidates);
+            populateLocationFilter();
+            renderCandidates(allCandidates);
+        });
+    </script>
+</body>
+</html>
